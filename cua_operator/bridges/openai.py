@@ -2,8 +2,8 @@ import sys
 from typing import Optional
 
 from openai import OpenAI, AsyncOpenAI
-from cua.bridges.base import BaseCuaBridge
-from cua.contracts.action import (
+from cua_operator.bridges.base import BaseCuaBridge
+from cua_operator.contracts.action import (
     CuaAction,
     CuaComputerAction,
     CuaComputerClickAction,

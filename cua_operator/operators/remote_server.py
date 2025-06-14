@@ -1,7 +1,7 @@
 import sys
 import asyncio
 import pickle
-import cua.tools
+import cua_operator.tools
 from .common import perform_computer_action
 
 
@@ -64,7 +64,7 @@ class RemoteCuaOperatorServer:
             pass
 
     async def _get_init_info(self) -> dict[str, object]:
-        dimensions: tuple[int, int] = await cua.tools.dimensions()
+        dimensions: tuple[int, int] = await cua_operator.tools.dimensions()
         if sys.platform == "win32":
             environment: str = "windows"
         elif sys.platform == "darwin":

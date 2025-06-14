@@ -1,13 +1,13 @@
 import asyncio
 import pickle
-from cua.contracts.action import (
+from cua_operator.contracts.action import (
     CuaComputerAction,
     CuaHumanConfirmAction,
     CuaHumanInputAction,
     CuaReasoningAction,
 )
 from .common import handle_non_computer_action
-from cua.bridges import BaseCuaBridge
+from cua_operator.bridges import BaseCuaBridge
 
 
 class RemoteCuaOperatorClient:

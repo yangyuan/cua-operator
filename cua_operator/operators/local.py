@@ -1,9 +1,9 @@
 import asyncio
 import sys
 from .common import perform_computer_action, handle_non_computer_action
-import cua.tools
-from cua.bridges import BaseCuaBridge
-from cua.contracts.action import (
+import cua_operator.tools
+from cua_operator.bridges import BaseCuaBridge
+from cua_operator.contracts.action import (
     CuaComputerAction,
     CuaHumanConfirmAction,
     CuaHumanInputAction,
@@ -20,7 +20,7 @@ class LocalCuaOperator:
         await self.bridge.complete_active(screenshot)
 
     async def run_async(self) -> None:
-        dimensions = await cua.tools.dimensions()
+        dimensions = await cua_operator.tools.dimensions()
         if sys.platform == "win32":
             environment = "windows"
         elif sys.platform == "darwin":

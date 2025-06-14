@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from cua.contracts.action import CuaAction
+from cua_operator.contracts.action import CuaAction
 
 
 class BaseCuaBridge(ABC):

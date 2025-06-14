@@ -16,8 +16,8 @@ pip install pillow openai
 Run the following Python script and start your journey.
 
 ```python
-from cua.bridges import OpenAICuaBridge
-from cua.operators import LocalCuaOperator
+from cua_operator.bridges import OpenAICuaBridge
+from cua_operator.operators import LocalCuaOperator
 from openai import OpenAI
 
 client = OpenAI(
@@ -32,12 +32,12 @@ operator.run()
 
 CUA-Operator is built around two core concepts: **operators** and **bridges**. An operator defines how you intend to interact with the CUA, whether through a local machine, a remote device, or potentially a Docker instance. A bridge specifies the service endpoint you connect to, such as OpenAI, with potential support for alternatives like Claude.
 
-All available operators are in the `cua.operators` namespace.
+All available operators are in the `cua_operator.operators` namespace.
 
 * **Local CUA Operator**: `LocalCuaOperator`
 * **Remote CUA Operator**: `RemoteCuaOperatorClient` and `RemoteCuaOperatorServer`
 
-All available bridges are in the `cua.bridges` namespace.
+All available bridges are in the `cua_operator.bridges` namespace.
 
 * **OpenAI CUA Bridge**: `OpenAICuaBridge`
 

@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
-from cua.operators import RemoteCuaOperatorServer
+from cua_operator.operators import RemoteCuaOperatorServer
 
 
 async def main():
