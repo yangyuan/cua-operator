@@ -1,7 +1,7 @@
 import sys
 from typing import Optional
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from cua.bridges.base import BaseCuaBridge
 from cua.contracts.action import (
     CuaAction,
@@ -19,7 +19,6 @@ from cua.contracts.action import (
     CuaHumanInputAction,
     CuaReasoningAction,
 )
-
 from openai.types.responses import (
     Response,
     ResponseOutputText,
@@ -32,10 +31,10 @@ from openai.types.responses.response_input_param import ComputerCallOutput
 class OpenAICuaBridge(BaseCuaBridge):
     def __init__(
         self,
-        client: OpenAI,
+        client: OpenAI | AsyncOpenAI,
         welcome_message: str = "Welcome to CUA Operator! Please enter your first task to get started.",
     ) -> None:
-        self.client: OpenAI = client
+        self.client: OpenAI | AsyncOpenAI = client
         self.welcome_message: str = welcome_message
         self._dimensions: Optional[tuple[int, int]] = None
         self._environment: Optional[str] = None
@@ -45,11 +44,11 @@ class OpenAICuaBridge(BaseCuaBridge):
         self._pending_items = []
         self._completed_items = []
 
-    def init(self, dimensions: tuple[int, int], environment: str) -> None:
+    async def init(self, dimensions: tuple[int, int], environment: str) -> None:
         self._dimensions = dimensions
         self._environment = environment
 
-    def input(self, user_input: str) -> None:
+    async def input(self, user_input: str) -> None:
         # input is also allowed if there are no active action
         if self._active_item is not None:
             # then it must be a message
@@ -58,9 +57,9 @@ class OpenAICuaBridge(BaseCuaBridge):
 
         item = EasyInputMessageParam(content=user_input, role="user", type="message")
         self._completed_items.append(item)
-        self._advance()
+        await self._advance()
 
-    def bypass(self) -> None:
+    async def bypass(self) -> None:
         if self._active_item is None:
             raise ValueError("No active item to bypass.")
         if self._active_item.type != "reasoning":
@@ -70,14 +69,14 @@ class OpenAICuaBridge(BaseCuaBridge):
         if self._pending_items is not None and len(self._pending_items) > 0:
             self._active_item = self._pending_items.pop(0)
 
-    def confirm(self, confirmed: bool) -> None:
+    async def confirm(self, confirmed: bool) -> None:
         if self._active_item is None:
             raise ValueError("No active item to confirm.")
 
         if confirmed:
             self._acknowledged_safety_checks = self._active_item.pending_safety_checks
 
-    def complete_active(self, screenshot_base64: str) -> None:
+    async def complete_active(self, screenshot_base64: str) -> None:
         if self._active_item is None:
             raise ValueError("No active item to complete.")
 
@@ -102,7 +101,7 @@ class OpenAICuaBridge(BaseCuaBridge):
         if self._pending_items is not None and len(self._pending_items) > 0:
             self._active_item = self._pending_items.pop(0)
         else:
-            self._advance()
+            await self._advance()
 
     def computer_call_to_action(self, item) -> CuaComputerAction:
         action = item.action
@@ -205,7 +204,7 @@ class OpenAICuaBridge(BaseCuaBridge):
                 path=[(point.x, point.y) for point in action.path],
             )
 
-    def active_action(self) -> CuaAction:
+    async def active_action(self) -> CuaAction:
         # if active item is a computer call action with acknowledge, yield a human_confirm action, clear other pending actions if there is any.
         # if active item is a computer call action with acknowledge, but confirm is called, yield a computer_call action
         # if active item is a computer call action without acknowledge, yield a computer_call action
@@ -298,7 +297,7 @@ class OpenAICuaBridge(BaseCuaBridge):
             response.output
         ), "Response must contain only message, computer call, or reasoning items. "
 
-    def _advance(self) -> None:
+    async def _advance(self) -> None:
         assert (
             self._environment is not None
         ), "Environment must be set before advancing."
@@ -325,6 +324,9 @@ class OpenAICuaBridge(BaseCuaBridge):
                 }
             ],
         )
+
+        if isinstance(self.client, AsyncOpenAI):
+            response = await response
 
         self._last_response_id = response.id
 

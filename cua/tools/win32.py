@@ -1,6 +1,5 @@
-# Renamed from windll.py to win32.py
+import asyncio
 import ctypes
-import time
 import base64
 from io import BytesIO
 from ctypes import wintypes
@@ -215,7 +214,7 @@ def send_input(input_obj: INPUT) -> None:
     user32.SendInput(1, ctypes.byref(input_obj), ctypes.sizeof(input_obj))
 
 
-def move(x: int, y: int) -> None:
+async def move(x: int, y: int) -> None:
     screen_width = user32.GetSystemMetrics(0)
     screen_height = user32.GetSystemMetrics(1)
     abs_x = int(x * 65535 / screen_width)
@@ -234,13 +233,13 @@ def move(x: int, y: int) -> None:
     send_input(inp)
 
 
-def click(
+async def click(
     button: str = "left", x: Optional[int] = None, y: Optional[int] = None
 ) -> None:
     # button: left, right, wheel, back, forward
     if x is not None and y is not None:
-        move(x, y)
-        time.sleep(SLEEP_INTERVAL)
+        await move(x, y)
+        await asyncio.sleep(SLEEP_INTERVAL)
     if button == "left":
         down_flag = MOUSEEVENTF_LEFTDOWN
         up_flag = MOUSEEVENTF_LEFTUP
@@ -268,34 +267,34 @@ def click(
     down = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, mouseData, down_flag, 0, 0))
     up = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, mouseData, up_flag, 0, 0))
     send_input(down)
-    time.sleep(SLEEP_INTERVAL)
+    await asyncio.sleep(SLEEP_INTERVAL)
     send_input(up)
 
 
-def double_click(x: Optional[int], y: Optional[int]) -> None:
-    click(button="left", x=x, y=y)
-    time.sleep(SLEEP_INTERVAL)
-    click(button="left", x=x, y=y)
+async def double_click(x: Optional[int], y: Optional[int]) -> None:
+    await click(button="left", x=x, y=y)
+    await asyncio.sleep(SLEEP_INTERVAL)
+    await click(button="left", x=x, y=y)
 
 
-def drag(path: list[tuple[int, int]]) -> None:
+async def drag(path: list[tuple[int, int]]) -> None:
     if not path or len(path) < 2:
         raise ValueError("Path must contain at least two points")
-    move(*path[0])
-    time.sleep(SLEEP_INTERVAL)
+    await move(*path[0])
+    await asyncio.sleep(SLEEP_INTERVAL)
     down = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTDOWN, 0, 0))
     send_input(down)
-    time.sleep(SLEEP_INTERVAL)
+    await asyncio.sleep(SLEEP_INTERVAL)
     for point in path[1:-1]:
-        move(*point)
-        time.sleep(SLEEP_INTERVAL)
-    move(*path[-1])
-    time.sleep(SLEEP_INTERVAL)
+        await move(*point)
+        await asyncio.sleep(SLEEP_INTERVAL)
+    await move(*path[-1])
+    await asyncio.sleep(SLEEP_INTERVAL)
     up = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTUP, 0, 0))
     send_input(up)
 
 
-def raw_key_press(vk_code: int) -> None:
+async def raw_key_press(vk_code: int) -> None:
     down = INPUT(
         type=INPUT_KEYBOARD,
         ki=KEYBDINPUT(wVk=vk_code, wScan=0, dwFlags=0, time=0, dwExtraInfo=0),
@@ -307,11 +306,11 @@ def raw_key_press(vk_code: int) -> None:
         ),
     )
     send_input(down)
-    time.sleep(SLEEP_INTERVAL)
+    await asyncio.sleep(SLEEP_INTERVAL)
     send_input(up)
 
 
-def key_press(keys: list[str]) -> None:
+async def key_press(keys: list[str]) -> None:
     vk_codes = []
     for key in keys:
         key_upper = key.upper()
@@ -324,14 +323,14 @@ def key_press(keys: list[str]) -> None:
         else:
             raise ValueError(f"Unknown key: {key}")
     for vk in vk_codes:
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
         down = INPUT(
             type=INPUT_KEYBOARD,
             ki=KEYBDINPUT(wVk=vk, wScan=0, dwFlags=0, time=0, dwExtraInfo=0),
         )
         send_input(down)
     for vk in reversed(vk_codes):
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
         up = INPUT(
             type=INPUT_KEYBOARD,
             ki=KEYBDINPUT(
@@ -341,9 +340,9 @@ def key_press(keys: list[str]) -> None:
         send_input(up)
 
 
-def type_text(text: str) -> None:
+async def type_text(text: str) -> None:
     for char in text:
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
         vk_scan = user32.VkKeyScanW(ord(char))
         vk = vk_scan & 0xFF
         shift = (vk_scan >> 8) & 0xFF
@@ -370,7 +369,7 @@ def type_text(text: str) -> None:
                 ),
             )
             send_input(down)
-            time.sleep(SLEEP_INTERVAL)
+            await asyncio.sleep(SLEEP_INTERVAL)
             send_input(up)
         else:
             if shift & 1:
@@ -381,7 +380,7 @@ def type_text(text: str) -> None:
                     ),
                 )
                 send_input(down)
-            raw_key_press(vk)
+            await raw_key_press(vk)
             if shift & 1:
                 up = INPUT(
                     type=INPUT_KEYBOARD,
@@ -396,10 +395,12 @@ def type_text(text: str) -> None:
                 send_input(up)
 
 
-def scroll(scroll_x: int, scroll_y: int, x: Optional[int], y: Optional[int]) -> None:
+async def scroll(
+    scroll_x: int, scroll_y: int, x: Optional[int], y: Optional[int]
+) -> None:
     if x is not None and y is not None:
-        move(x, y)
-        time.sleep(SLEEP_INTERVAL)
+        await move(x, y)
+        await asyncio.sleep(SLEEP_INTERVAL)
     if scroll_y != 0:
         inp = INPUT(
             type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, scroll_y, MOUSEEVENTF_WHEEL, 0, 0)
@@ -413,7 +414,7 @@ def scroll(scroll_x: int, scroll_y: int, x: Optional[int], y: Optional[int]) -> 
         send_input(inp)
 
 
-def screenshot() -> str:
+async def screenshot() -> str:
     img = ImageGrab.grab()
     screen_width = user32.GetSystemMetrics(0)
     screen_height = user32.GetSystemMetrics(1)
@@ -424,11 +425,11 @@ def screenshot() -> str:
     return img_str
 
 
-def dimensions() -> tuple[int, int]:
+async def dimensions() -> tuple[int, int]:
     screen_width = user32.GetSystemMetrics(0)
     screen_height = user32.GetSystemMetrics(1)
     return screen_width, screen_height
 
 
-def wait() -> None:
-    time.sleep(1)
+async def wait() -> None:
+    await asyncio.sleep(1)

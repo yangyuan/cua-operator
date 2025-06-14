@@ -38,11 +38,13 @@ class RemoteCuaOperatorServer:
                     request: dict = pickle.loads(data)
                     if isinstance(request, dict) and "command" in request:
                         if request["command"] == "init":
-                            info: dict[str, object] = self._get_init_info()
+                            info: dict[str, object] = await self._get_init_info()
                             writer.write(pickle.dumps(info) + b"END")
                             await writer.drain()
                         elif request["command"] == "action":
-                            result: object = perform_computer_action(request["payload"])
+                            result: object = await perform_computer_action(
+                                request["payload"]
+                            )
                             writer.write(pickle.dumps(result) + b"END")
                             await writer.drain()
                         else:
@@ -61,9 +63,8 @@ class RemoteCuaOperatorServer:
         except Exception:
             pass
 
-    def _get_init_info(self) -> dict[str, object]:
-
-        dimensions: tuple[int, int] = cua.tools.dimensions()
+    async def _get_init_info(self) -> dict[str, object]:
+        dimensions: tuple[int, int] = await cua.tools.dimensions()
         if sys.platform == "win32":
             environment: str = "windows"
         elif sys.platform == "darwin":

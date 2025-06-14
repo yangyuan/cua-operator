@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "openai"]
+test = ["pytest", "pytest-asyncio", "openai"]
 
 [build-system]
 requires = ["setuptools"]

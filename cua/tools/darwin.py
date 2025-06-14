@@ -1,10 +1,11 @@
+import asyncio
 import ctypes
 import ctypes.util
-import time
 import base64
 from io import BytesIO
 from typing import Optional
 from PIL import Image
+import asyncio
 
 # Load CoreGraphics
 core = ctypes.cdll.LoadLibrary(ctypes.util.find_library("CoreGraphics"))
@@ -196,7 +197,7 @@ KEY_MAP = {
 SLEEP_INTERVAL = 0.01
 
 
-def move(x: int, y: int) -> None:
+async def move(x: int, y: int) -> None:
     event = core.CGEventCreateMouseEvent(
         None, kCGEventMouseMoved, CGPoint(x, y), kCGMouseButtonLeft
     )
@@ -204,12 +205,12 @@ def move(x: int, y: int) -> None:
     core.CFRelease(event)
 
 
-def click(
+async def click(
     button: str = "left", x: Optional[int] = None, y: Optional[int] = None
 ) -> None:
     if x is not None and y is not None:
-        move(x, y)
-        time.sleep(SLEEP_INTERVAL)
+        await move(x, y)
+        await asyncio.sleep(SLEEP_INTERVAL)
     btn_map = {
         "left": kCGMouseButtonLeft,
         "right": kCGMouseButtonRight,
@@ -234,19 +235,19 @@ def click(
         # For back/forward/other buttons, use OtherMouse events
         events = [kCGEventOtherMouseDown, kCGEventOtherMouseUp]
     for t in events:
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
         event = core.CGEventCreateMouseEvent(None, t, pt, btn)
         core.CGEventPost(kCGHIDEventTap, event)
         core.CFRelease(event)
 
 
-def double_click() -> None:
-    click()
-    time.sleep(SLEEP_INTERVAL)
-    click()
+async def double_click() -> None:
+    await click()
+    await asyncio.sleep(SLEEP_INTERVAL)
+    await click()
 
 
-def drag(path: list[tuple[int, int]]) -> None:
+async def drag(path: list[tuple[int, int]]) -> None:
     if not path or len(path) < 2:
         raise ValueError("Path must contain at least two points")
     pt_start = CGPoint(*path[0])
@@ -255,7 +256,7 @@ def drag(path: list[tuple[int, int]]) -> None:
     )
     core.CGEventPost(kCGHIDEventTap, event)
     core.CFRelease(event)
-    time.sleep(SLEEP_INTERVAL)
+    await asyncio.sleep(SLEEP_INTERVAL)
     for point in path[1:-1]:
         pt = CGPoint(*point)
         event = core.CGEventCreateMouseEvent(
@@ -263,14 +264,14 @@ def drag(path: list[tuple[int, int]]) -> None:
         )
         core.CGEventPost(kCGHIDEventTap, event)
         core.CFRelease(event)
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
     pt_end = CGPoint(*path[-1])
     event = core.CGEventCreateMouseEvent(
         None, kCGEventLeftMouseDragged, pt_end, kCGMouseButtonLeft
     )
     core.CGEventPost(kCGHIDEventTap, event)
     core.CFRelease(event)
-    time.sleep(SLEEP_INTERVAL)
+    await asyncio.sleep(SLEEP_INTERVAL)
     event = core.CGEventCreateMouseEvent(
         None, kCGEventLeftMouseUp, pt_end, kCGMouseButtonLeft
     )
@@ -285,7 +286,7 @@ def get_mouse_pos() -> tuple[float, float]:
     return pt.x, pt.y
 
 
-def key_press(keys: list[str]) -> None:
+async def key_press(keys: list[str]) -> None:
     # Press down all keys in order
     keycodes = []
     for key in keys:
@@ -300,13 +301,13 @@ def key_press(keys: list[str]) -> None:
         core.CGEventPost(kCGHIDEventTap, event_down)
         core.CFRelease(event_down)
         keycodes.append(keycode)
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
     # Release all keys in reverse order
     for keycode in reversed(keycodes):
         event_up = core.CGEventCreateKeyboardEvent(None, keycode, False)
         core.CGEventPost(kCGHIDEventTap, event_up)
         core.CFRelease(event_up)
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
 
 
 # Set CGEventKeyboardSetUnicodeString signature
@@ -318,7 +319,7 @@ core.CGEventKeyboardSetUnicodeString.argtypes = [
 ]
 
 
-def type_text(text: str) -> None:
+async def type_text(text: str) -> None:
     # Types text using CGEventKeyboardSetUnicodeString for Unicode support
     # Reference: https://developer.apple.com/documentation/coregraphics/1454426-cgeventkeyboardsetunicodestring
     for char in text:
@@ -331,21 +332,21 @@ def type_text(text: str) -> None:
         core.CGEventKeyboardSetUnicodeString(event_down, length, buf)
         core.CGEventPost(kCGHIDEventTap, event_down)
         core.CFRelease(event_down)
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
         # Key up event
         event_up = core.CGEventCreateKeyboardEvent(None, 0, False)
         core.CGEventKeyboardSetUnicodeString(event_up, length, buf)
         core.CGEventPost(kCGHIDEventTap, event_up)
         core.CFRelease(event_up)
-        time.sleep(SLEEP_INTERVAL)
+        await asyncio.sleep(SLEEP_INTERVAL)
 
 
-def scroll(
+async def scroll(
     scroll_x: int, scroll_y: int, x: Optional[int] = None, y: Optional[int] = None
 ) -> None:
     if x is not None and y is not None:
-        move(x, y)
-        time.sleep(SLEEP_INTERVAL)
+        await move(x, y)
+        await asyncio.sleep(SLEEP_INTERVAL)
     event = None
     if scroll_y != 0 and scroll_x != 0:
         # Both directions: 2 axes
@@ -408,13 +409,13 @@ def raw_screenshot() -> str:
     return img_str
 
 
-def screenshot() -> str:
+async def screenshot() -> str:
     # Use PIL to capture the screen and return as base64 PNG string
     from PIL import ImageGrab
 
     img = ImageGrab.grab()
     # Resize to match dimensions() output (physical pixel size)
-    width, height = dimensions()
+    width, height = await dimensions()
     if img.size != (width, height):
         img = img.resize((width, height), Image.LANCZOS)
     buffered = BytesIO()
@@ -423,7 +424,7 @@ def screenshot() -> str:
     return img_str
 
 
-def dimensions() -> tuple[int, int]:
+async def dimensions() -> tuple[int, int]:
     # Get main display ID
     core.CGMainDisplayID.restype = ctypes.c_uint32
     display_id = core.CGMainDisplayID()
@@ -436,5 +437,5 @@ def dimensions() -> tuple[int, int]:
     return width, height
 
 
-def wait() -> None:
-    time.sleep(1)
+async def wait() -> None:
+    await asyncio.sleep(1)

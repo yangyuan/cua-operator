@@ -1,4 +1,4 @@
-import socket
+import asyncio
 import pickle
 from cua.contracts.action import (
     CuaComputerAction,
@@ -18,39 +18,46 @@ class RemoteCuaOperatorClient:
         self.host: str = host
         self.port: int = port
 
-    def send_command(self, command: str, payload: object = None) -> object:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((self.host, self.port))
-            s.sendall(pickle.dumps({"command": command, "payload": payload}) + b"END")
-            data: bytes = b""
-            while True:
-                part: bytes = s.recv(4096)
-                if not part:
-                    break
-                data += part
-                if data.endswith(b"END"):
-                    data = data[:-3]
-                    break
-            result: object = pickle.loads(data)
-            if isinstance(result, dict) and "error" in result:
-                raise RuntimeError(result["error"])
-            return result
-
-    def apply_computer_action(self, action: CuaComputerAction) -> None:
-        print(f"Sending action: {action}")
-        screenshot: str = self.send_command("action", action)
-        self.bridge.complete_active(screenshot)
-
-    def run(self) -> None:
-        info: dict = self.send_command("init")
-        self.bridge.init(info["dimensions"], info["environment"])
+    async def _send_command(self, command: str, payload: object = None) -> object:
+        reader, writer = await asyncio.open_connection(self.host, self.port)
+        writer.write(pickle.dumps({"command": command, "payload": payload}) + b"END")
+        await writer.drain()
+        data: bytes = b""
         while True:
-            action = self.bridge.active_action()
+            part: bytes = await reader.read(4096)
+            if not part:
+                break
+            data += part
+            if data.endswith(b"END"):
+                data = data[:-3]
+                break
+        writer.close()
+        await writer.wait_closed()
+        result: object = pickle.loads(data)
+        if isinstance(result, dict) and "error" in result:
+            raise RuntimeError(result["error"])
+        return result
+
+    async def _apply_computer_action(self, action: CuaComputerAction) -> None:
+        print(f"Sending action: {action}")
+        screenshot: str = await self._send_command("action", action)
+        await self.bridge.complete_active(screenshot)
+
+    async def run_async(self) -> None:
+        info: dict = await self._send_command("init")
+        await self.bridge.init(info["dimensions"], info["environment"])
+        while True:
+            action = await self.bridge.active_action()
             if action is None:
                 break
             if isinstance(action, CuaComputerAction):
-                self.apply_computer_action(action)
+                await self._apply_computer_action(action)
             elif isinstance(
                 action, (CuaHumanConfirmAction, CuaHumanInputAction, CuaReasoningAction)
             ):
-                handle_non_computer_action(self.bridge, action)
+                await handle_non_computer_action(self.bridge, action)
+
+    def run(self) -> None:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.run_async())
+        loop.close()

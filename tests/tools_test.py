@@ -1,14 +1,17 @@
 import cua.tools
+import pytest
 
 
-def test_import():
+@pytest.mark.asyncio
+async def test_import():
     assert hasattr(cua.tools, "move")
     assert hasattr(cua.tools, "click")
     assert hasattr(cua.tools, "screenshot")
 
 
-def test_dimensions_screenshot():
-    dimensions = cua.tools.dimensions()
+@pytest.mark.asyncio
+async def test_dimensions_screenshot():
+    dimensions = await cua.tools.dimensions()
     assert isinstance(dimensions, tuple)
     assert len(dimensions) == 2
     assert isinstance(dimensions[0], int)
@@ -16,7 +19,7 @@ def test_dimensions_screenshot():
     assert dimensions[0] > 0
     assert dimensions[1] > 0
 
-    screenshot = cua.tools.screenshot()
+    screenshot = await cua.tools.screenshot()
     assert isinstance(screenshot, str)
 
     # decode base64 and check PNG size matches dimensions
