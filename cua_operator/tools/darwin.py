@@ -51,6 +51,35 @@ core.CGEventCreateScrollWheelEvent.argtypes = [
     ctypes.c_uint32,
     ctypes.c_int32,
 ]
+# Add correct signature for CGEventSourceCreate
+core.CGEventSourceCreate.restype = ctypes.c_void_p
+core.CGEventSourceCreate.argtypes = [ctypes.c_uint32]
+
+# Add CGEventSetFlags signature (missing, causes crash if not set)
+core.CGEventSetFlags = core.CGEventSetFlags
+core.CGEventSetFlags.restype = None
+core.CGEventSetFlags.argtypes = [ctypes.c_void_p, ctypes.c_uint64]
+
+CGEventSetType = core.CGEventSetType
+CGEventSetType.argtypes = [ctypes.c_void_p, ctypes.c_uint32]  # eventRef, eventType
+CGEventSetType.restype = None
+
+# Add CGEventSetIntegerValueField and kCGMouseEventClickState for double-click support
+core.CGEventSetIntegerValueField.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_int,
+    ctypes.c_long,
+]
+core.CGEventSetIntegerValueField.restype = None
+
+core.CGEventKeyboardSetUnicodeString.restype = None
+core.CGEventKeyboardSetUnicodeString.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_size_t,
+    ctypes.POINTER(ctypes.c_uint16),
+]
+
+kCGMouseEventClickState = 1
 
 # Mouse event types
 kCGEventLeftMouseDown = 1
@@ -222,8 +251,11 @@ async def click(
     if button not in btn_map:
         raise ValueError(f"Unknown button: {button}")
     btn = btn_map[button]
-    loc = get_mouse_pos()
-    pt = CGPoint(*loc)
+    if x is not None and y is not None:
+        pt = CGPoint(x, y)
+    else:
+        loc = get_mouse_pos()
+        pt = CGPoint(*loc)
     # Determine event types for the button
     if btn == kCGMouseButtonLeft:
         events = [kCGEventLeftMouseDown, kCGEventLeftMouseUp]
@@ -241,10 +273,29 @@ async def click(
         core.CFRelease(event)
 
 
-async def double_click() -> None:
-    await click()
+async def double_click(x: Optional[int] = None, y: Optional[int] = None) -> None:
+    if x is not None and y is not None:
+        await move(x, y)
+        await asyncio.sleep(SLEEP_INTERVAL)
+        pt = CGPoint(x, y)
+    else:
+        loc = get_mouse_pos()
+        pt = CGPoint(*loc)
+    event_dclick = core.CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseDown, pt, kCGMouseButtonLeft
+    )
+    core.CGEventSetIntegerValueField(event_dclick, kCGMouseEventClickState, 1)
+    core.CGEventPost(kCGHIDEventTap, event_dclick)
+    core.CGEventSetType(event_dclick, kCGEventLeftMouseUp)
+    core.CGEventPost(kCGHIDEventTap, event_dclick)
     await asyncio.sleep(SLEEP_INTERVAL)
-    await click()
+    core.CGEventSetIntegerValueField(event_dclick, kCGMouseEventClickState, 2)
+    core.CGEventSetType(event_dclick, kCGEventLeftMouseDown)
+    core.CGEventPost(kCGHIDEventTap, event_dclick)
+    core.CGEventSetType(event_dclick, kCGEventLeftMouseUp)
+    core.CGEventPost(kCGHIDEventTap, event_dclick)
+    await asyncio.sleep(SLEEP_INTERVAL)
+    core.CFRelease(event_dclick)
 
 
 async def drag(path: list[tuple[int, int]]) -> None:
@@ -287,36 +338,72 @@ def get_mouse_pos() -> tuple[float, float]:
 
 
 async def key_press(keys: list[str]) -> None:
-    # Press down all keys in order
-    keycodes = []
-    for key in keys:
+    # macOS modifier flags
+    MODIFIER_FLAGS = {
+        "SHIFT": 0x20000,  # kCGEventFlagMaskShift (correct value)
+        "CTRL": 0x40000,  # kCGEventFlagMaskControl (correct value)
+        "ALT": 0x80000,  # kCGEventFlagMaskAlternate (correct value)
+        "CMD": 0x100000,  # kCGEventFlagMaskCommand (correct value)
+        "OPTION": 0x80000,  # alias for ALT
+    }
+
+    keys_upper = [k.upper() for k in keys]
+    modifiers = [k for k in keys_upper if k in MODIFIER_FLAGS]
+    normal_keys = [k for k in keys_upper if k not in MODIFIER_FLAGS]
+
+    if not normal_keys:
+        keycodes = [KEY_MAP[k] for k in modifiers if k in KEY_MAP]
+        for keycode in keycodes:
+            event_down = core.CGEventCreateKeyboardEvent(None, keycode, True)
+            core.CGEventPost(kCGHIDEventTap, event_down)
+            core.CFRelease(event_down)
+        await asyncio.sleep(SLEEP_INTERVAL)
+        for keycode in reversed(keycodes):
+            event_up = core.CGEventCreateKeyboardEvent(None, keycode, False)
+            core.CGEventPost(kCGHIDEventTap, event_up)
+            core.CFRelease(event_up)
+        return
+
+    flags = 0
+    for mod in modifiers:
+        flags |= MODIFIER_FLAGS[mod]
+
+    modifier_keycodes = []
+    for mod in modifiers:
+        if mod in KEY_MAP:
+            keycode = KEY_MAP[mod]
+            modifier_keycodes.append(keycode)
+            event_down = core.CGEventCreateKeyboardEvent(None, keycode, True)
+            core.CGEventPost(kCGHIDEventTap, event_down)
+            core.CFRelease(event_down)
+
+    for key in normal_keys:
         k = key.upper()
         if k in KEY_MAP:
             keycode = KEY_MAP[k]
-        elif len(key) == 1 and key.upper() in KEY_MAP:
-            keycode = KEY_MAP[key.upper()]
+        elif len(key) == 1 and k.upper() in KEY_MAP:
+            keycode = KEY_MAP[k.upper()]
         else:
             continue
+
         event_down = core.CGEventCreateKeyboardEvent(None, keycode, True)
+        if flags:
+            core.CGEventSetFlags(event_down, flags)
         core.CGEventPost(kCGHIDEventTap, event_down)
         core.CFRelease(event_down)
-        keycodes.append(keycode)
-        await asyncio.sleep(SLEEP_INTERVAL)
-    # Release all keys in reverse order
-    for keycode in reversed(keycodes):
+
+        event_up = core.CGEventCreateKeyboardEvent(None, keycode, False)
+        if flags:
+            core.CGEventSetFlags(event_up, flags)
+        core.CGEventPost(kCGHIDEventTap, event_up)
+        core.CFRelease(event_up)
+
+    await asyncio.sleep(SLEEP_INTERVAL)
+
+    for keycode in reversed(modifier_keycodes):
         event_up = core.CGEventCreateKeyboardEvent(None, keycode, False)
         core.CGEventPost(kCGHIDEventTap, event_up)
         core.CFRelease(event_up)
-        await asyncio.sleep(SLEEP_INTERVAL)
-
-
-# Set CGEventKeyboardSetUnicodeString signature
-core.CGEventKeyboardSetUnicodeString.restype = None
-core.CGEventKeyboardSetUnicodeString.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_size_t,
-    ctypes.POINTER(ctypes.c_uint16),
-]
 
 
 async def type_text(text: str) -> None:

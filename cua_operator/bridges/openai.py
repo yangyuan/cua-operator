@@ -288,7 +288,7 @@ class OpenAICuaBridge(BaseCuaBridge):
                 _count_reasoning_call += 1
 
         assert (
-            _count_message + _count_computer_call
+            _count_message + _count_computer_call + _count_reasoning_call
         ) > 0, "Response must contain at least one message or computer call item."
         assert (
             _count_message < 2 and _count_computer_call < 2

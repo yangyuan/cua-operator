@@ -16,5 +16,5 @@ test = ["pytest", "pytest-asyncio", "openai"]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["cua_operator"]
+[tool.setuptools.packages.find]
+include = ["cua_operator*"]

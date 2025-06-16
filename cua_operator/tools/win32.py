@@ -3,14 +3,13 @@ import ctypes
 import base64
 from io import BytesIO
 from ctypes import wintypes
-from typing import Optional
+from typing import Optional, Union
 from PIL import ImageGrab, Image
 
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
-# --- Constants ---
 SLEEP_INTERVAL = 0.01
 
 INPUT_MOUSE = 0
@@ -210,8 +209,15 @@ class INPUT(ctypes.Structure):
     _fields_ = [("type", wintypes.DWORD), ("_input", _INPUT)]
 
 
-def send_input(input_obj: INPUT) -> None:
-    user32.SendInput(1, ctypes.byref(input_obj), ctypes.sizeof(input_obj))
+def send_input(input_obj: Union[INPUT, list[INPUT]]) -> None:
+    """Send a single INPUT or a sequence of INPUTs."""
+    if isinstance(input_obj, list):
+        n_inputs = len(input_obj)
+        arr_type = INPUT * n_inputs
+        arr = arr_type(*input_obj)
+        user32.SendInput(n_inputs, ctypes.byref(arr), ctypes.sizeof(INPUT))
+    else:
+        user32.SendInput(1, ctypes.byref(input_obj), ctypes.sizeof(input_obj))
 
 
 async def move(x: int, y: int) -> None:
@@ -266,12 +272,10 @@ async def click(
         )
     down = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, mouseData, down_flag, 0, 0))
     up = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, mouseData, up_flag, 0, 0))
-    send_input(down)
-    await asyncio.sleep(SLEEP_INTERVAL)
-    send_input(up)
+    send_input([down, up])
 
 
-async def double_click(x: Optional[int], y: Optional[int]) -> None:
+async def double_click(x: Optional[int] = None, y: Optional[int] = None) -> None:
     await click(button="left", x=x, y=y)
     await asyncio.sleep(SLEEP_INTERVAL)
     await click(button="left", x=x, y=y)
@@ -294,22 +298,6 @@ async def drag(path: list[tuple[int, int]]) -> None:
     send_input(up)
 
 
-async def raw_key_press(vk_code: int) -> None:
-    down = INPUT(
-        type=INPUT_KEYBOARD,
-        ki=KEYBDINPUT(wVk=vk_code, wScan=0, dwFlags=0, time=0, dwExtraInfo=0),
-    )
-    up = INPUT(
-        type=INPUT_KEYBOARD,
-        ki=KEYBDINPUT(
-            wVk=vk_code, wScan=0, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=0
-        ),
-    )
-    send_input(down)
-    await asyncio.sleep(SLEEP_INTERVAL)
-    send_input(up)
-
-
 async def key_press(keys: list[str]) -> None:
     vk_codes = []
     for key in keys:
@@ -322,22 +310,26 @@ async def key_press(keys: list[str]) -> None:
                 vk_codes.append(vk)
         else:
             raise ValueError(f"Unknown key: {key}")
-    for vk in vk_codes:
-        await asyncio.sleep(SLEEP_INTERVAL)
-        down = INPUT(
+
+    downs = [
+        INPUT(
             type=INPUT_KEYBOARD,
             ki=KEYBDINPUT(wVk=vk, wScan=0, dwFlags=0, time=0, dwExtraInfo=0),
         )
-        send_input(down)
-    for vk in reversed(vk_codes):
-        await asyncio.sleep(SLEEP_INTERVAL)
-        up = INPUT(
+        for vk in vk_codes
+    ]
+    ups = [
+        INPUT(
             type=INPUT_KEYBOARD,
             ki=KEYBDINPUT(
                 wVk=vk, wScan=0, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=0
             ),
         )
-        send_input(up)
+        for vk in reversed(vk_codes)
+    ]
+    send_input(downs)
+    await asyncio.sleep(SLEEP_INTERVAL)
+    send_input(ups)
 
 
 async def type_text(text: str) -> None:
@@ -372,31 +364,52 @@ async def type_text(text: str) -> None:
             await asyncio.sleep(SLEEP_INTERVAL)
             send_input(up)
         else:
+            downs = []
+            ups = []
             if shift & 1:
-                down = INPUT(
+                downs.append(
+                    INPUT(
+                        type=INPUT_KEYBOARD,
+                        ki=KEYBDINPUT(
+                            wVk=VK_SHIFT, wScan=0, dwFlags=0, time=0, dwExtraInfo=0
+                        ),
+                    )
+                )
+            downs.append(
+                INPUT(
+                    type=INPUT_KEYBOARD,
+                    ki=KEYBDINPUT(wVk=vk, wScan=0, dwFlags=0, time=0, dwExtraInfo=0),
+                )
+            )
+            ups.append(
+                INPUT(
                     type=INPUT_KEYBOARD,
                     ki=KEYBDINPUT(
-                        wVk=VK_SHIFT, wScan=0, dwFlags=0, time=0, dwExtraInfo=0
+                        wVk=vk, wScan=0, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=0
                     ),
                 )
-                send_input(down)
-            await raw_key_press(vk)
+            )
             if shift & 1:
-                up = INPUT(
-                    type=INPUT_KEYBOARD,
-                    ki=KEYBDINPUT(
-                        wVk=VK_SHIFT,
-                        wScan=0,
-                        dwFlags=KEYEVENTF_KEYUP,
-                        time=0,
-                        dwExtraInfo=0,
-                    ),
+                ups.append(
+                    INPUT(
+                        type=INPUT_KEYBOARD,
+                        ki=KEYBDINPUT(
+                            wVk=VK_SHIFT,
+                            wScan=0,
+                            dwFlags=KEYEVENTF_KEYUP,
+                            time=0,
+                            dwExtraInfo=0,
+                        ),
+                    )
                 )
-                send_input(up)
+
+            send_input(downs)
+            await asyncio.sleep(SLEEP_INTERVAL)
+            send_input(ups)
 
 
 async def scroll(
-    scroll_x: int, scroll_y: int, x: Optional[int], y: Optional[int]
+    scroll_x: int, scroll_y: int, x: Optional[int] = None, y: Optional[int] = None
 ) -> None:
     if x is not None and y is not None:
         await move(x, y)
