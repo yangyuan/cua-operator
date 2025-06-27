@@ -1,7 +1,4 @@
-import sys, os
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+# pip install cua-operator openai
 import asyncio
 from cua_operator.operators import RemoteCuaOperatorServer
 

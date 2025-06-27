@@ -1,5 +1,6 @@
 import sys, os
 
+# Optional: Add local directory to sys.path to enable imports without installing the package.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio

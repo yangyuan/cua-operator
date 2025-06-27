@@ -10,7 +10,7 @@ CUA is a new and evolving technology, but it currently lacks good documentation,
 Get Python Ready
 
 ```shell
-pip install pillow openai
+pip install cua-operator openai
 ```
 
 Run the following Python script and start your journey.

@@ -1,7 +1,7 @@
 [project]
 name = "cua-operator"
 description = "Computer-Using Agent (CUA) Operator"
-version = "0.0.0"
+version = "0.0.1"
 requires-python = ">=3.8"
 readme = "README.md"
 license-files = ["LICENSE"]

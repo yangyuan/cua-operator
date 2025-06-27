@@ -2,11 +2,14 @@
 import asyncio
 from cua_operator.bridges import OpenAICuaBridge
 from cua_operator.operators import LocalCuaOperator
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 
 async def main():
-    client = OpenAI()
+    client = AsyncOpenAI(
+        api_key="{OPENAI_API_KEY}"
+    )
+
     operator = LocalCuaOperator(bridge=OpenAICuaBridge(client))
     await operator.run_async()
 
